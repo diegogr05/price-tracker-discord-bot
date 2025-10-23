@@ -3,29 +3,36 @@ from bs4 import BeautifulSoup
 import re
 from config import USER_AGENT
 
-CURRENCY_REGEX = re.compile(r'([R\$US\$]|USD|R\$|₲)?\s*([0-9\.,]+)')
+CURRENCY_REGEX = re.compile(r'([R\$US\$]|USD|₲)?\s*([0-9\.,]+)')
 
 async def fetch_html(url, user_agent=USER_AGENT):
     headers = {
-        "User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                   "Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        "User-Agent": user_agent or (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/128.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://www.google.com/",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Connection": "keep-alive",
-        "DNT": "1"
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "no-cache"
     }
 
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=25) as resp:
+            async with session.get(url, timeout=30) as resp:
                 if resp.status != 200:
-                    print(f"⚠️ Erro ao acessar {url}: status {resp.status}")
+                    print(f"⚠️ Erro ao acessar {url} — status {resp.status}")
                     return ""
-                return await resp.text()
+                html = await resp.text()
+                if not html.strip():
+                    print("⚠️ HTML vazio retornado, possível bloqueio de scraper.")
+                return html
     except Exception as e:
-        print(f"❌ Erro na requisição: {e}")
+        print(f"❌ Erro ao buscar {url}: {e}")
         return ""
 
 def parse_price_from_text(text):
@@ -55,7 +62,7 @@ async def scrape_product_page(url):
         if title:
             name = title.get_text(strip=True)
 
-    # Seletores comuns para preços
+    # Seletores de preço comuns
     selectors = [
         '[itemprop=price]',
         '.price',
@@ -85,9 +92,10 @@ async def scrape_product_page(url):
         except:
             pass
 
-    # Último recurso: procurar texto bruto
+    # Último recurso: procurar no texto bruto
     p, c = parse_price_from_text(soup.get_text(" ", strip=True))
     if p is not None:
         return name or "Sem título", p, c or "USD"
 
+    print(f"⚠️ Nenhum preço encontrado para {url}")
     return name or "Sem título", None, None
