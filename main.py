@@ -145,6 +145,21 @@ async def remover(interaction: discord.Interaction, query: str):
     ok = await remove_item_by_url_or_name(str(interaction.guild_id), query)
     await interaction.followup.send('✅ Item removido.' if ok else '❌ Não encontrei item com esse nome ou link.')
 
+# 🔧 Servidor "falso" para manter o Render ativo
+import threading
+import http.server
+import socketserver
+
+def keep_alive():
+    PORT = 8080
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"🌐 Servidor falso rodando na porta {PORT}")
+        httpd.serve_forever()
+
+threading.Thread(target=keep_alive, daemon=True).start()
+
+# 🚀 Início do bot
 if __name__ == '__main__':
     if not TOKEN:
         print('ERROR: DISCORD_TOKEN não configurado. Edite o arquivo .env')
