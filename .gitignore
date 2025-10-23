@@ -1,0 +1,15 @@
+# Ignorar variáveis de ambiente e banco local
+.env
+*.db
+
+# Ignorar dependências locais e caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Ignorar arquivos de log e temporários
+*.log
+*.tmp
