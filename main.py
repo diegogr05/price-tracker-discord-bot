@@ -5,6 +5,9 @@ from datetime import datetime
 from config import TOKEN, CHECK_INTERVAL_MINUTES, NOTIFY_CHANNEL_ID
 from database import init_db, get_all_items, update_price, add_item, remove_item_by_url_or_name, get_min_price
 from scraper import scrape_product_page, fetch_html
+import threading
+import http.server
+import socketserver
 
 def percent_change(old, new):
     try:
@@ -79,18 +82,25 @@ async def check_prices():
 @bot.tree.command(name='seguir', description='Começar a monitorar um produto (link do ComprasParaguai)')
 @app_commands.describe(link='Link direto do produto')
 async def seguir(interaction: discord.Interaction, link: str):
-    await interaction.response.defer()
-    name, price, curr = await scrape_product_page(link)
-    if price is None:
-        await interaction.followup.send('❌ Não foi possível extrair o preço desse link.')
-        return
-    await add_item(str(interaction.guild_id), str(interaction.channel_id), link, name, price, curr)
-    await interaction.followup.send(f'✅ Comecei a monitorar **{name}** por {price:.2f} {curr}.')
+    try:
+        await interaction.response.defer(thinking=True)
+        name, price, curr = await scrape_product_page(link)
+        if price is None:
+            await interaction.followup.send('❌ Não foi possível extrair o preço desse link.', ephemeral=True)
+            return
+        await add_item(str(interaction.guild_id), str(interaction.channel_id), link, name, price, curr)
+        await interaction.followup.send(f'✅ Comecei a monitorar **{name}** por {price:.2f} {curr}.')
+    except Exception as e:
+        print(f"Erro em /seguir: {e}")
+        try:
+            await interaction.followup.send('⚠️ Ocorreu um erro ao tentar seguir o produto.', ephemeral=True)
+        except:
+            pass
 
 @bot.tree.command(name='consulta', description='Buscar preço(s) no ComprasParaguai por nome')
 @app_commands.describe(query='Nome do produto (busca)')
 async def consulta(interaction: discord.Interaction, query: str):
-    await interaction.response.defer()
+    await interaction.response.defer(thinking=True)
     search_url = f"https://www.comprasparaguai.com.br/busca/?s={query.replace(' ', '+')}"
     html = await fetch_html(search_url)
     from bs4 import BeautifulSoup
@@ -120,7 +130,7 @@ async def consulta(interaction: discord.Interaction, query: str):
 
 @bot.tree.command(name='lista', description='Listar todos os produtos monitorados neste servidor')
 async def lista(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(thinking=True)
     items = await get_all_items()
     guild_items = [i for i in items if str(i[1]) == str(interaction.guild_id)]
     if not guild_items:
@@ -141,15 +151,11 @@ async def lista(interaction: discord.Interaction):
 @bot.tree.command(name='remover', description='Remover um item do monitoramento (nome ou link)')
 @app_commands.describe(query='Nome do produto ou link')
 async def remover(interaction: discord.Interaction, query: str):
-    await interaction.response.defer()
+    await interaction.response.defer(thinking=True)
     ok = await remove_item_by_url_or_name(str(interaction.guild_id), query)
     await interaction.followup.send('✅ Item removido.' if ok else '❌ Não encontrei item com esse nome ou link.')
 
-# 🔧 Servidor "falso" para manter o Render ativo
-import threading
-import http.server
-import socketserver
-
+# 🔹 Fake server (necessário para Render não encerrar a instância)
 def keep_alive():
     PORT = 8080
     Handler = http.server.SimpleHTTPRequestHandler
@@ -159,7 +165,6 @@ def keep_alive():
 
 threading.Thread(target=keep_alive, daemon=True).start()
 
-# 🚀 Início do bot
 if __name__ == '__main__':
     if not TOKEN:
         print('ERROR: DISCORD_TOKEN não configurado. Edite o arquivo .env')
