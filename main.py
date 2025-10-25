@@ -5,9 +5,21 @@ from datetime import datetime
 from config import TOKEN, CHECK_INTERVAL_MINUTES, NOTIFY_CHANNEL_ID
 from database import init_db, get_all_items, update_price, add_item, remove_item_by_url_or_name, get_min_price
 from scraper import scrape_product_page, fetch_html
-import threading
-import http.server
-import socketserver
+from flask import Flask
+from threading import Thread
+
+# --- Manter o bot online no Render ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "✅ Price Tracker Discord Bot está rodando no Render!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+Thread(target=run_flask, daemon=True).start()
+# ------------------------------------
 
 def percent_change(old, new):
     try:
@@ -154,16 +166,6 @@ async def remover(interaction: discord.Interaction, query: str):
     await interaction.response.defer(thinking=True)
     ok = await remove_item_by_url_or_name(str(interaction.guild_id), query)
     await interaction.followup.send('✅ Item removido.' if ok else '❌ Não encontrei item com esse nome ou link.')
-
-# 🔹 Fake server (necessário para Render não encerrar a instância)
-def keep_alive():
-    PORT = 8080
-    Handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"🌐 Servidor falso rodando na porta {PORT}")
-        httpd.serve_forever()
-
-threading.Thread(target=keep_alive, daemon=True).start()
 
 if __name__ == '__main__':
     if not TOKEN:
